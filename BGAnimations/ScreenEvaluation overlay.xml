@@ -17,8 +17,8 @@
 	<Layer 
 		Type="Quad"
 		OnCommand="diffuse,#1E282F;stretchto,SCREEN_CENTER_X-139,41,SCREEN_CENTER_X+139,61;diffusealpha,0.85"
-	/>	
-	
+	/>
+
 	<Layer 
 		Condition="modRate ~= 1"
 		Type="Quad"
@@ -66,13 +66,20 @@
 					else
 						self:SetFromSteps(GAMESTATE:GetCurrentSteps(PLAYER_1))
 					end
+					P1Difficulty = self:GetChild('Difficulty'):GetText()
 				end"
 		/>
+		<Layer 
+			Font="_misobold small"
+			Text="???" 
+			OnCommand="x,25;y,2;zoom,0.4;shadowlength,0;horizalign,left;maxwidth,240;queuecommand,Set" 
+			SetCommand="%function(self) self:settext(P1Difficulty) end" 
+		/>		
 		<Layer 
 			Condition="not GAMESTATE:IsCourseMode()"
 			Font="_misobold small"
 			Text="???" 
-			OnCommand="x,25;zoom,0.4;shadowlength,0;horizalign,left;maxwidth,240;queuecommand,Set" 
+			OnCommand="x,25;y,-12;zoom,0.4;shadowlength,0;horizalign,left;maxwidth,240;queuecommand,Set" 
 			SetCommand="%function(self) self:settext(GetStepsDescriptionText(PLAYER_1)) end" 
 		/>		
 	</children> </Layer>
@@ -97,13 +104,20 @@
 					else
 						self:SetFromSteps(GAMESTATE:GetCurrentSteps(PLAYER_2))
 					end
+					P2Difficulty = self:GetChild('Difficulty'):GetText()
 				end"
+		/>
+		<Layer 
+			Font="_misobold small"
+			Text="???" 
+			OnCommand="x,-25;y,2;zoom,0.4;shadowlength,0;horizalign,right;maxwidth,240;queuecommand,Set" 
+			SetCommand="%function(self) self:settext(P2Difficulty) end" 
 		/>
 		<Layer 
 			Condition="not GAMESTATE:IsCourseMode()"
 			Font="_misobold small"
 			Text="???" 
-			OnCommand="x,-25;zoom,0.4;shadowlength,0;horizalign,right;maxwidth,240;queuecommand,Set" 
+			OnCommand="x,-25;y,-12;zoom,0.4;shadowlength,0;horizalign,right;maxwidth,240;queuecommand,Set" 
 			SetCommand="%function(self) self:settext(GetStepsDescriptionText(PLAYER_2)) end" 
 		/>
 	</children> </Layer>

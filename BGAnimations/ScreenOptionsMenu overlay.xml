@@ -27,7 +27,8 @@
 		Type="BitmapText"
 		Font="_misoreg small"
 		Condition="Platform() == 'arcade'"
-		SetCommand="%function(self) self:settext( string.format('%02i:%02i:%02i %s %02i %04i', Hour(), Minute(), Second(), MonthToString(MonthOfYear()-1), DayOfMonth(), Year()) ) end"
+		SetCommand="%function(self) if OPENITG then self:settext( string.format('%02i:%02i:%02i %s %02i %04i', Hour(), Minute(), Second(), MonthToString(MonthOfYear()), DayOfMonth(), Year()) )
+					else self:settext( string.format('%02i:%02i:%02i %s %02i %04i', Hour(), Minute(), Second(), MonthToString(MonthOfYear()-1), DayOfMonth(), Year()) ) end end"
 		PulseMessageCommand="playcommand,Set"
 		Text=""
 		InitCommand="x,SCREEN_CENTER_X+300;y,SCREEN_CENTER_Y-200;shadowlength,0;horizalign,right;zoom,0.5;playcommand,Set"

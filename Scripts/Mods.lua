@@ -13,6 +13,7 @@
 -- [SCREEN PLAYER OPTIONS]
 -- LineNames=@lineNames
 -- LineMod=lua,OptionFromList()
+-- LineNoteSkins=list,NoteSkins
 -- OptionMenuFlags=@playerOptions.Flags
 -- AllowRepeatingChangeValueInput=PlayerOptionsInit()
 -- ThemeTitles=0
@@ -23,6 +24,10 @@
 -- CancelAllP2ShowCommand=%CancelAll
 -- CancelAllP1OnCommand=aux,1;TWEENS
 -- CancelAllP2OnCommand=aux,2;TWEENS
+
+-- [Option Menu that changes machine profile preferences]
+-- FrameOffCommand=%SaveProfile
+-- FrameSaveProfileCommand=%function() PROFILEMAN:SaveMachineProfile() end
 
 -- [ScreenSongOptions]
 -- NextScreen=@nextScreen
@@ -62,45 +67,13 @@
 -- <ActorFrame Command="%ScreenEditInit" FirstUpdateCommand="%ScreenEdit" />
 
 -----------------------
--- Utility Functions
------------------------
-function number(n) return tonumber(tostring(n)) or loadstring('return '..n)() or 0 end
-function SM(str) SCREENMAN:SystemMessage(str) end
-function BM(str) MESSAGEMAN:Broadcast(str) end
-function Screen() return SCREENMAN:GetTopScreen() end
-function Sound(str) SOUND:PlayOnce( Path("sounds",str )) end
-function Path(ec,str) return THEME:GetPath( _G['EC_'..string.upper(ec)] , '' , str ) end
-function Player(pn) return GAMESTATE:IsPlayerEnabled(pn-1) end
-function PlayerIndex(pn) if pn == GAMESTATE:GetNumPlayersEnabled() then return pn end return 1 end
-function Profile(pn) if pn == 0 then return PROFILEMAN:GetMachineProfile():GetSaved() else return PROFILEMAN:GetProfile(pn-1):GetSaved() end end
-function GetPref(str) return PREFSMAN:GetPreference(str) end
-function SetPref(str,val) return PREFSMAN:SetPreference(str,val) end
-function ThemeFile( file ) return THEME:GetPath( EC_GRAPHICS, '' , themeDir..'/'..file ) end
-function IsType(a,t) return string.find(tostring(a),t) end
-function TableToString(t) local s = '' for i,v in ipairs(t) do s = s .. tostring(v) end return s end
-function GetStartScreen() if GetPref('BreakComboToGetItem') and GetInputType and GetInputType() == "" then return "ScreenArcadeStart" end return THEME:GetMetric('Common','FirstAttractScreen') end
-function GetArcadeStartScreen() if GetInputType() == "" then return "ScreenArcadeStart" end	return THEME:GetMetric('Common','FirstAttractScreen') end
-function MaxLength(str,l) if string.len(str) > l then str = string.sub(str,0,l-3) .. '...' end return str end
-function RowMetric(b,a,r) if r then rowYNum = 0 rowYAdd = a rowYBase = b rowYOffTop = rowYBase + rowYAdd*0.5 return r elseif a then rowYNum = rowYNum + a end rowYNum = rowYNum + 1 if b ~= 'Exit' then rowYOffCenter = rowYBase + rowYAdd*(rowYNum+1+math.mod(rowYNum,2))/2 rowYOffBottom = rowYBase + rowYAdd*(rowYNum+1/2) end return rowYBase+rowYAdd*rowYNum end
-function GetTime() return ((DayOfMonth()*24 + Hour())*60 + Minute())*60 + Second() end
-function GetTimeRemaining() local p = GetPref('EndlessBreakLength')*60 local t = GetTime() - SetStartTime if p > 0 then return p - t else return t end end
-function GetTimeDisplay() local t = SecondsToMSS(GetTimeRemaining()) return t end
-function SecondsToMSS(n) local t = SecondsToMSSMsMs(math.abs(n)) t = string.sub(t,0,string.len(t)-3) if tonumber(n) < 0 then t = '-' .. t end return t end
-function ForceSongAndSteps() if not GAMESTATE:GetCurrentSong() then local song = SONGMAN:GetRandomSong() GAMESTATE:SetCurrentSong(song) steps = song:GetAllSteps() GAMESTATE:SetCurrentSteps(0,steps[1]) GAMESTATE:SetCurrentSteps(1,steps[1]) end end
-function Diffuse(self,c,n) if not c[4] then c[4] = 1 end if n == 1 then self:diffuseupperleft(c[1],c[2],c[3],c[4]) elseif n == 2 then self:diffuseupperright(c[1],c[2],c[3],c[4]) elseif n == 3 then self:diffuselowerleft(c[1],c[2],c[3],c[4]) elseif n == 4 then self:diffuselowerright(c[1],c[2],c[3],c[4]) else self:diffuse(c[1],c[2],c[3],c[4]) end end
-function ApplyMod(mod,pn,f) local m = mod if m then if f then m = f .. '% ' .. m end GAMESTATE:ApplyGameCommand('mod,'..m,pn) end end
-function CheckMod(pn,mod) return mod and GAMESTATE:PlayerIsUsingModifier(pn,mod) end
-function SummaryBranch() ForceSongAndSteps() if not scoreIndex then scoreIndex = 1 end if scoreIndex <= table.getn(AllScores) then return ScreenList('Summary') else scoreIndex = 1 return ScreenList('Ending') end end
-function Clock(val) local t = Screen():GetSecsIntoEffect() if val then t = math.mod(1 + t - val,1) end return t end
-
------------------------
 -- Default Values
 -----------------------
 
 -- Redefine these in Theme.lua if other values are desired.
 
 -- Used with GoTo option for PlayerOptions and with Summary screen. These can return either functions or strings.
-	screenList = { TitleMenu = 'TitleMenu' , SelectMusic = 'SelectMusic' , PlayerOptions = 'PlayerOptions' , Stage = 'Stage' , Gameplay = 'Gameplay' , Evaluation = 'Evaluation' , Summary = 'Summary' , Ending = 'TitleMenu' }
+	screenList = { TitleMenu = 'TitleMenu' , SelectMusic = 'SelectMusic' , PlayerOptions = 'PlayerOptions' , Stage = 'Stage' , Gameplay = 'Gameplay' , Evaluation = 'Evaluation' , NameEntry = 'NameEntry' , Summary = 'Summary' , Ending = 'TitleMenu' }
 	function ScreenList(str) if type(screenList[str]) == 'function' then return screenList[str]() else return screenList[str] end end
 
 -- Judgment tween commands.
@@ -141,26 +114,59 @@ function Clock(val) local t = Screen():GetSecsIntoEffect() if val then t = math.
 -- These will be the option rows available on the [nth] option screen. The 'NextScreen' row will be automatically added as long as there is more than 1 option screen.
 	playerOptions = {}
 	playerOptions[1] = { 'SpeedType','SpeedNumber','Mini','Perspective','NoteSkin','Turn','LifeBar','Compare','Rate' }
-	playerOptions[2] = { 'Turn','Accel','Scroll','Effect','Appearance','Handicap','InsertTaps','InsertOther','Hide' }
+	playerOptions[2] = { 'Turn','Accel','Scroll','Effect','Appearance','Handicap','InsertTaps','InsertOther','Hide','Ghost' }
 	playerOptions.Edit = { 'SpeedType','SpeedNumber','Mini','Perspective','NoteSkin','Turn' }
 	ShowAllInRow = false
+
+-----------------------
+-- Utility Functions
+-----------------------
+function number(n) return tonumber(tostring(n)) or loadstring('return '..n)() or 0 end
+function SM(str) SCREENMAN:SystemMessage(str) end
+function BM(str) MESSAGEMAN:Broadcast(str) end
+function Screen() return SCREENMAN:GetTopScreen() end
+function Sound(str) SOUND:PlayOnce( Path("sounds",str )) end
+function Path(ec,str) return THEME:GetPath( _G['EC_'..string.upper(ec)] , '' , str ) end
+function Player(pn) return GAMESTATE:IsPlayerEnabled(pn-1) end
+function PlayerIndex(pn) if pn == GAMESTATE:GetNumPlayersEnabled() then return pn end return 1 end
+function Profile(pn) if not PROFILEMAN then return {} end if pn == 0 then return PROFILEMAN:GetMachineProfile():GetSaved() else return PROFILEMAN:GetProfile(pn-1):GetSaved() end end
+function GetPref(str) return PREFSMAN:GetPreference(str) end
+function SetPref(str,val) return PREFSMAN:SetPreference(str,val) end
+function ThemeFile( file ) return THEME:GetPath( EC_GRAPHICS, '' , themeDir..'/'..file ) end
+function ThemeName() local str = string.sub(THEME:GetPath(2,'','_blank.png'),9) return string.sub(str,1,string.find(str,'/')-1) end   
+function VocalizePath() return '/Themes/' .. tostring(Profile(0).Love and Profile(0).Love.Dir or 'Simply Love') .. '/Vocalize/' end
+function IsType(a,t) return string.find(tostring(a),t) end
+function TableToString(t) local s = '' for i,v in ipairs(t) do s = s .. tostring(v) end return s end
+function GetStartScreen() if GetPref('BreakComboToGetItem') and GetInputType and GetInputType() == "" then return "ScreenArcadeStart" end return THEME:GetMetric('Common','FirstAttractScreen') end
+function GetArcadeStartScreen() if GetInputType() == "" then return "ScreenArcadeStart" end	return THEME:GetMetric('Common','FirstAttractScreen') end
+function MaxLength(str,l) if string.len(str) > l then str = string.sub(str,0,l-3) .. '...' end return str end
+function RowMetric(b,a,r) if r then rowYNum = 0 rowYAdd = a rowYBase = b rowYOffTop = rowYBase + rowYAdd*0.5 return r elseif a then rowYNum = rowYNum + a end rowYNum = rowYNum + 1 if b ~= 'Exit' then rowYOffCenter = rowYBase + rowYAdd*(rowYNum+1+math.mod(rowYNum,2))/2 rowYOffBottom = rowYBase + rowYAdd*(rowYNum+1/2) end return rowYBase+rowYAdd*rowYNum end
+function SecondsToMSS(n) local t = SecondsToMSSMsMs(math.abs(n)) t = string.sub(t,0,string.len(t)-3) if tonumber(n) < 0 then t = '-' .. t end return t end
+function MSSMsMsToSeconds(t) return string.sub(t,string.len(t)-4,string.len(t)) + string.sub(t,1,string.len(t)-6)*60 end
+function ForceSongAndSteps() if not GAMESTATE:GetCurrentSong() then local song = SONGMAN:GetRandomSong() GAMESTATE:SetCurrentSong(song) steps = song:GetAllSteps() GAMESTATE:SetCurrentSteps(0,steps[1]) GAMESTATE:SetCurrentSteps(1,steps[1]) end end
+function Diffuse(self,c,n) if not c[4] then c[4] = 1 end if n == 1 then self:diffuseupperleft(c[1],c[2],c[3],c[4]) elseif n == 2 then self:diffuseupperright(c[1],c[2],c[3],c[4]) elseif n == 3 then self:diffuselowerleft(c[1],c[2],c[3],c[4]) elseif n == 4 then self:diffuselowerright(c[1],c[2],c[3],c[4]) else self:diffuse(c[1],c[2],c[3],c[4]) end end
+function ApplyMod(mod,pn,f) local m = mod if m then if f then m = f .. '% ' .. m end GAMESTATE:ApplyGameCommand('mod,'..m,pn) end end
+function CheckMod(pn,mod) return mod and GAMESTATE:PlayerIsUsingModifier(pn,mod) end
+function SummaryBranch() ForceSongAndSteps() if not scoreIndex then scoreIndex = 1 end if scoreIndex <= table.getn(AllScores) then return ScreenList('Summary') else scoreIndex = 1 return ScreenList('Ending') end end
+function Clock(val) local t = GlobalClock:GetSecsIntoEffect() if val then t = t - val end return t end
+function MusicClock() return Screen():GetSecsIntoEffect() end
 
 --------------------------------
 -- BGAnimation Functions
 --------------------------------
 
-function SelectMusicInit(self) InitializeMods() optionIndex = 0 self:queuecommand('FirstUpdate') end
+function SelectMusicInit(self) TimedSet.Class = 0; InitializeMods() optionIndex = 0; GhostDataCache = { }; for pn=1,2 do GhostData(pn,"Cache") end; self:queuecommand('FirstUpdate') end
 function SelectMusic(self) self:queuecommand('Capture') end
 
-function EvaluationInit(self) RevertHideBG() RevertRateAdjust() self:queuecommand('FirstUpdate') end
-function Evaluation() CaptureJudgment() AddScoreToListFromEval() ApplyHideBG() SaveToProfile() end
+function GameplayInit(self) TimedSet.Class = 1; Combo = {} lifeNormal = {} lifeHot = {} holdJudgments = {} self:queuecommand('FirstUpdate') end
+function Gameplay(self) ApplyRateAdjust() JudgmentInit() SurroundLife() Danger.Time = {0,0} Danger.State = { false, false} Dead.Time = {0,0} Dead.State = { false, false } Screen():effectclock('music') self:luaeffect('Update') end
 
-function GameplayInit(self) ApplyRateAdjust() Combo = {} lifeNormal = {} lifeHot = {} holdJudgments = {} self:queuecommand('FirstUpdate') end
-function Gameplay(self) JudgmentInit() SurroundLife() Danger.Time = {0,0} Danger.State = { false, false} Dead.Time = {0,0} Dead.State = { false, false } Screen():effectclock('music') self:luaeffect('Update') end
+function EvaluationInit(self) TimedSet.Class = 2; RevertHideBG() RevertRateAdjust() self:queuecommand('FirstUpdate') end
+function Evaluation() CaptureJudgment() AddScoreToListFromEval() ApplyHideBG() SaveToProfile() end
 
 function ScreenEditInit(self) InitializeMods() holdJudgments = {} JudgmentInit() optionIndex = 'Edit' GameplayInit(self) end
 function ScreenEdit() end
-	
+
 ---------------------------------------
 -- Judgment/Gameplay/GhostData Functions
 ---------------------------------------
@@ -176,13 +182,15 @@ function GameplayUpdate(self)
 	for pn=1,2 do if Player(pn) then
 		UpdateCheck('Danger',pn)
 		UpdateCheck('Dead',pn)
+		if GAMESTATE:IsCourseMode() then return end
 		if (MaxDP[pn] or -1) > 0 then
-			if (GetScore(pn) <= 100*judge[pn].CurDP/MaxDP[pn] - 0.01) and GetScore(pn) ~= judge[pn].Score then TrackJudgment(false,9,pn) end --  Score must have changed to reflect judgment, machines update slower.
+			if (GetScore(pn) <= 100*judge[pn].CurDP/MaxDP[pn] - 0.01) and GetScore(pn) ~= judge[pn].Score then TrackJudgment(false,9,pn) end -- Score must have changed to reflect judgment, machines update slower.
 			UpdateGhostData(pn)
 			UpdateStreams(pn)
 			UpdateCompareText(pn)
 			UpdateMeasureText(pn)
 		end
+		if Dead.State[pn] and not judge[pn].Dead then judge[pn].Dead = table.getn(judge[pn].Data) end -- Record judgment of death, checked after mine detection.
 	end end
 end
 
@@ -206,12 +214,12 @@ function TrackJudgment(self,j,p)
 		judge[pn].T = judge[pn].T + 1
 		AddStepToStream(pn,j)
 	end
-	table.insert( judge[pn].Data , { r , Clock() } ) -- compressed to ghost data
+	table.insert( judge[pn].Data , { r , MusicClock() } ) -- compressed to ghost data
 end
 
 trackedStreams = {0,1,4,8,12,16,24,32}
 function AddStepToStream(pn,j) -- Each note frequency gets a table of {start beat,end beat} pairs.
-	table.insert(judge[pn].Steps,{GAMESTATE:GetSongBeat(),Clock(),j})
+	table.insert(judge[pn].Steps,{GAMESTATE:GetSongBeat(),MusicClock(),j})
 	for i,v in ipairs(trackedStreams) do
 		if table.getn(judge[pn].Steps) >= v then
 			local s = judge[pn].Stream[i][table.getn(judge[pn].Stream[i])]
@@ -231,7 +239,7 @@ end
 function UpdateStreams(pn)
 	if judge[pn].Steps[1] then
 		local b = GAMESTATE:GetSongBeat() - judge[pn].Steps[1][1]
-		local t = (Clock() - judge[pn].Steps[1][2])/modRate -- Clock() uses song time, which updates faster with rate mods.
+		local t = (MusicClock() - judge[pn].Steps[1][2])/modRate -- Clock() uses song time, which updates faster with rate mods.
 		if b > 4 then -- Saves a little work on most updates, and avoids calculating timing windows in beats when t == 0.
 			local w = (judge[pn].Steps[1][3] == 6 and 0) or math.min(b/t*(JudgeWindow(judge[pn].Steps[1][3])+JudgeWindow(5)),4)	-- Miss cancels the offset from a later possible miss. Any other judgment is assumed early to be inclusive. Clamped at 4 beats in case of large jumps.
 			if b - w > 4 then
@@ -252,11 +260,11 @@ function UpdateCheck(str,pn)
 	end
 end
 
-function UpdateGhostData(pn)
-	if ghost[pn].Data[ghost[pn].I] and ghost[pn].Data[ghost[pn].I][2] < Clock() then 
+function UpdateGhostData(pn) -- Keep tap number synced, handle non-taps as they occur.
+	while ghost[pn].Data[ghost[pn].I] and (ghost[pn].T < judge[pn].T or (ghost[pn].Data[ghost[pn].I][1] > 6 and ghost[pn].Data[ghost[pn].I][2] < MusicClock())) do
 		local j = ghost[pn].Data[ghost[pn].I][1]
 		if j > 7+NumColumns(pn) then j = 8 elseif j > 7 then j = 7 judge[pn].Delay = true elseif j == 7 then j = 9 else ghost[pn].T = ghost[pn].T + 1 end
-		ghost[pn].CurDP = ghost[pn].CurDP + ScoreWeight(j)
+		if (ghost[pn].Dead or table.getn(ghost[pn].Data)) > ghost[pn].I then ghost[pn].CurDP = ghost[pn].CurDP + ScoreWeight(j) end -- Don't update DP count for the deceased.
 		ghost[pn][j] = ghost[pn][j] + 1
 		ghost[pn].I = ghost[pn].I + 1
 		for i,v in ipairs(ghost[pn].Stream) do if v[v[0]+1] and v[v[0]+1][1] < GAMESTATE:GetSongBeat() then v[0] = v[0]+1 end end
@@ -291,20 +299,23 @@ function UpdateMeasureText(pn)
 				end
 			end
 			if tonumber(str) and k and k[k[0]] and k[k[0]][1] <= GAMESTATE:GetSongBeat() then
-				str = str .. '/' .. math.max(math.floor((k[k[0]][2] - k[k[0]][1])/4),str) -- If current stream is longer than recorded, use current length.
+				str = str .. '/' .. math.max(math.floor((k[k[0]][2] - z[table.getn(z)][1])/4),str) -- If current stream is longer than recorded, use current length.
 			end
 		end end
 		measureText[pn]:settext(str)
 	end
 end
 
-function CompareText(self) local pn = self:getaux() compareText[pn] = self self:shadowlength(0) self:horizalign('left') self:zoom(0.4) local p = Screen():GetChild('PlayerP'..pn) if p then local j = p:GetChild('Judgment') self:x(p:GetX()+j:GetX()+80) self:y(p:GetY()+j:GetY()-20) else self:zoom(0) end ModTextFormat(self,pn) end
-function MeasureText(self) local pn = self:getaux() measureText[pn] = self self:shadowlength(0) self:horizalign('right') self:zoom(0.4) local p = Screen():GetChild('PlayerP'..pn) if p then local j = p:GetChild('Judgment') self:x(p:GetX()+j:GetX()-60) self:y(p:GetY()+j:GetY()-20) else self:zoom(0) end ModTextFormat(self,pn) end
+function CompareText(self) local pn = self:getaux() compareText[pn] = self self:shadowlength(0) self:horizalign('left') self:zoom(0.4) local p = Screen():GetChild('PlayerP'..pn) if p then local j = p:GetChild('Judgment') self:x(p:GetX()+j:GetX()+80) self:y(p:GetY()+j:GetY()+30) else self:zoom(0) end ModTextFormat(self,pn) end
+function MeasureText(self) local pn = self:getaux() measureText[pn] = self self:shadowlength(0) self:horizalign('right') self:zoom(0.4) local p = Screen():GetChild('PlayerP'..pn) if p then local j = p:GetChild('Judgment') self:x(p:GetX()+j:GetX()-60) self:y(p:GetY()+j:GetY()+30) else self:zoom(0) end ModTextFormat(self,pn) end
 
 function NumColumns(pn) local cols = {4,8,8,6,5,6,10,10,5,10,7,5,10,8,6,12,8,16,4,8,4,5,8,8,10,5,9} local s = GAMESTATE:GetCurrentSteps(pn-1) return s and cols[s:GetStepsType()+1] or 0 end
 
-function GhostData(pn,fnctn)
+function GhostData(pn,fnctn,check)
 	if GAMESTATE:IsCourseMode() then return end -- Too much of a headache for now.
+
+	if not Profile(pn).Ghost then Profile(pn).Ghost = { } end
+	if not Profile(0).Ghost then Profile(0).Ghost = { } end
 
 	local b = {0,10,13,34,38,39,60,62,92} -- bad characters.
 	local m = 255 - table.getn(b) -- number of characters.
@@ -321,7 +332,7 @@ function GhostData(pn,fnctn)
 		end
 		return f
 	end
-		
+	  
 	local function CompareParams(v) -- Score, MaxDP, Difficulty, Columns, SongDir
 		local f = ParseString(v[0],string.char(1))
 		if f[2] == MaxDP[pn] and f[3] == GAMESTATE:GetCurrentSteps(pn-1):GetDifficulty() and f[4] == NumColumns(pn) and f[5] == GAMESTATE:GetCurrentSong():GetSongDir() then return tonumber(f[1]) or 0 else return false end
@@ -334,12 +345,13 @@ function GhostData(pn,fnctn)
 	end
 
 	local function num(n) -- Account for skipped characters.
+		if n == string.char(0) then return -1 end
 		local a = string.byte(n)
 		for i=table.getn(b),1,-1 do if a >= b[i] then a = a - 1 end end
 		return a
 	end
 
-	if fnctn == 'Compress' then
+	if fnctn == 'Compress' and (Profile(0).Ghost.Save or Profile(pn).Ghost.Save) then
 		local slot = {}
 		for k = 0,pn,pn do -- If data for the song is already saved, find the index. If the new score is higher save in it's place, otherwise don't save.
 			if not Profile(k).Ghost then Profile(k).Ghost = {} end
@@ -348,22 +360,24 @@ function GhostData(pn,fnctn)
 				if CompareParams(v) then if CompareParams(v) < GetScore(pn) then slot[k] = i else slot[k] = 0 end end
 			end
 		end
-		if judge[pn].Data[1] and ((slot[0] ~= 0 and Profile(0).Ghost.Save == 2) or (slot[pn] ~= 0 and Profile(pn).Ghost.Save == 1)) then  -- Only compress if it will be saved somewhere.
+		if judge[pn].Data[1] and (slot[0] ~= 0 or slot[pn] ~= 0) and MaxDP[pn] then  -- Only compress if it will be saved somewhere.
 			local tab = {'',''}
 			tab[0] = GetScore(pn) .. string.char(1) .. MaxDP[pn] .. string.char(1) .. GAMESTATE:GetCurrentSteps(pn-1):GetDifficulty() .. string.char(1) .. NumColumns(pn) .. string.char(1) .. GAMESTATE:GetCurrentSong():GetSongDir()
 			for k,d in ipairs(judge[pn].Data) do
-				local n = string.format('%i',d[2]*32+1/2)*j + d[1] - 1 -- total value
+				local n = string.format('%i',math.max(d[2],0)*32+1/2)*j + d[1] - 1 -- total value
 				local t = ( n - math.mod(n,z) )/ z -- time segments passed before this judgment
 				for i=m-1-z,0,-1 do while t >= c + 2^i do c = c + 2^i; tab[1] = tab[1] .. char(m-i) end end -- Add time characters as needed.
 				tab[1] = tab[1] .. char(n - t*z)
+				if k == judge[pn].Dead then tab[1] = tab[1] .. string.char(0) end -- Indicate that most recent judgment was fatal.
 			end
-			for i,v in ipairs(judge[pn].Stream) do 
+			for i,v in ipairs(judge[pn].Stream) do
 				tab[2] = tab[2] .. (i~=1 and string.char(1) or '')
-				for j,z in ipairs(v) do tab[2] = tab[2] .. string.char(2) .. '{' .. math.floor(z[1]) .. ',' .. math.floor(z[2]) .. '}' end 
+				for j,z in ipairs(v) do tab[2] = tab[2] .. string.char(2) .. '{' .. math.floor(z[1]) .. ',' .. math.floor(z[2]) .. '}' end
 			end
 
-			if Profile(0).Ghost.Save == 2 and slot[0] ~= 0 then Profile(0).Ghost[slot[0]] = tab end
-			if Profile(pn).Ghost.Save == 2 and slot[pn] ~= 0 then Profile(pn).Ghost[slot[pn]] = tab end
+			if Profile(0).Ghost.Save and slot[0] ~= 0 then Profile(0).Ghost[slot[0]] = tab end
+			if Profile(pn).Ghost.Save and slot[pn] ~= 0 then Profile(pn).Ghost[slot[pn]] = tab end
+
 		end
 	end
 
@@ -381,22 +395,71 @@ function GhostData(pn,fnctn)
 				local n = num(string.sub(s,1,1))
 				if n > z then
 					c = c + 2^(m-n)
-				else
+				elseif n >= 0 then
 					table.insert(ghost[pn].Data, { math.mod(n,j) + 1 , ( n - math.mod(n,j) + z*c )/j/32 } ) -- insert { judgment , seconds*32 }
+				else
+					ghost[pn].Dead = table.getn(ghost[pn].Data) -- Previous judgment was fatal.
 				end
 				s = string.sub(s,2)
 			end
-			
+
 			for i,v in ipairs(b) do
 				table.insert(ghost[pn].Stream,{}); ghost[pn].Stream[i][0] = 1
 				local a = ParseString(v,string.char(2))
 				for j,z in ipairs(a) do if j > 1 then table.insert(ghost[pn].Stream[i],loadstring('return '..z)())end end
-			end	
+			end
 
 			if p[1] ~= ghost[pn].pn then if p[1] == 0 then ghost[pn].Score = (tonumber(MachineHighScoreText[pn]) or 0)/100 else ghost[pn].Score = (tonumber(ProfileHighScoreText[pn]) or 0)/100 end end
 			if ghost[pn].Score == 0 then ghost[pn].pn = -1; ghost[pn].Score = 1 end -- If compared score is 0, use subtractive instead.
 		end
 	end
+
+	if fnctn == 'Cache' then
+		for n,k in ipairs({pn,0}) do
+			if not GhostDataCache[k] then
+				local t = { }
+				for i,v in ipairs(Profile(k).Ghost or {}) do
+					local f = ParseString(v[0],string.char(1)) -- Score, MaxDP, Difficulty, Columns, SongDir
+					local dir = f[5]
+					local dif = f[3]
+					if not dir then -- erase old style data.
+						Profile(k).Ghost[i] = nil
+					else
+						if not t[dir] then t[dir] = { } end
+						t[dir][dif] = { Col = f[4]; MaxDP = f[2] }
+					end
+				end
+				for i,v in pairs(t) do
+				end
+				GhostDataCache[k] = t
+			end
+		end
+	end
+
+	if fnctn == 'Check' then
+		local t = GhostDataCache[check]
+		if not t then return false end
+		
+		local song = GAMESTATE:GetCurrentSong()
+		if not song then return false end
+
+		t = t[song:GetSongDir()]
+		if not t then return false end
+
+		local steps = GAMESTATE:GetCurrentSteps(pn-1)
+		if not steps then return false end
+
+		t = t[steps:GetDifficulty()]
+		if not t then return false end
+		
+		if t.Col ~= NumColumns(pn) then return false end
+
+		if t.MaxDP ~= MaxDP[pn] then return false end
+		
+		return true
+
+	end
+
 end
 
 -- judgeGraphArray[pn][j][i] = number of judgment j you got in i-th frame
@@ -412,9 +475,11 @@ function JudgeGraphArray()
 			for k,d in ipairs(judge[pn].Data) do
 				local i = math.min(math.floor(1+judgeGraphWidth*d[2]/judge[pn].Data[table.getn(judge[pn].Data)][2]),judgeGraphWidth)
 				local j = d[1]
-				judgeGraphArray[pn][j][i] = judgeGraphArray[pn][j][i] + 1
-				judgeGraphArray[pn][0][i] = judgeGraphArray[pn][0][i] + 1
-				judgeGraphArray[pn][j][0] = math.max(judgeGraphArray[pn][j][0],judgeGraphArray[pn][j][i])
+				if j <= 6 then -- tap judgments only
+					judgeGraphArray[pn][j][i] = judgeGraphArray[pn][j][i] + 1
+					judgeGraphArray[pn][0][i] = judgeGraphArray[pn][0][i] + 1
+					judgeGraphArray[pn][j][0] = math.max(judgeGraphArray[pn][j][0],judgeGraphArray[pn][j][i])
+				end
 			end
 		end   
 	end
@@ -439,7 +504,7 @@ function JudgmentColor( n , alpha )
 	return 1,1,1,1
 end
 
-function ResetScores() AllScores = {} SetStartTime = GetTime() end
+function ResetScores() AllScores = {} end
 function AddScoreToListFromEval()
 	local add = false
 	local score = {}
@@ -462,7 +527,7 @@ function AddScoreToListFromEval()
 			Fail = fail,
 			BPM = bpm,
 			Judge = judge,
-			Time = GetTime() - SetStartTime
+			Time = Clock( TimedSet.Start )
 		}
 	table.insert(AllScores,list)
 	end
@@ -474,11 +539,14 @@ end
 
 function InitializeMods()
 	if GAMESTATE:GetEnv('Mods') then return end
+	ModsPlayer = { }
 	ModCustom = { LifeBar = {1,1}, JudgmentFont = {1,1}, Compare = {1,1}, Measure = {1,1} }
 	modRate = 1
 	CalculateSpeedMod()
 	ResetScores()
+	TimedSet.Reset()
 	LoadFromProfile()
+	if Profile(0).TimedSets and not GAMESTATE:IsEventMode() then GAMESTATE:SetTemporaryEventMode(true) end
 	GAMESTATE:SetEnv('Mods',1)
 end
 
@@ -486,6 +554,7 @@ function LoadFromProfile()
 	for pn = 1,2 do if Player(pn) then local t = Profile(pn) if not t.Mods then t.Mods = {} end
 		for s,v in pairs(ModCustom) do v[pn] = tonumber(t.Mods[s]) or 1 end
 		for i,v in ipairs(judgmentFontList) do if t.Mods.JudgmentFont == v then ModCustom.JudgmentFont[pn] = i end end
+		if vocalize and Profile(pn).Voice then vocalize[pn] = Profile(pn).Voice end
 		LoadFloatFromProfile(pn,'Mini',t)
 		if t.Mods.Cover then ApplyMod('cover',pn) end
 	end end
@@ -503,6 +572,7 @@ function SaveToProfile()
 	for pn = 1,2 do if Player(pn) then local t = Profile(pn)
 		if not t.Mods then t.Mods = {} end
 		for s,v in pairs(ModCustom) do t.Mods[s] = v[pn] end
+		if vocalize then Profile(pn).Voice = vocalize[pn] end
 		t.Mods.JudgmentFont = judgmentFontList[ModCustom.JudgmentFont[pn]]
 		t.Mods.Mini = OptionFromEvalPlayerOptions(pn,'mini')
 		GhostData(pn,'Compress')
@@ -564,7 +634,7 @@ function CaptureMeter()
 end
 
 function CaptureSteps()
-	for pn = 1, 2 do if GAMESTATE:GetCurrentSteps(pn-1) then st = GAMESTATE:GetCurrentSteps(pn-1):GetStepsType() break end end
+	for pn = 1, 2 do if GAMESTATE:GetCurrentSteps(pn-1) then st = GAMESTATE:GetCurrentSteps(pn-1):GetStepsType() break end end 
 	steps = {}
 	if GAMESTATE:GetCurrentSong() then
 		steps = GAMESTATE:GetCurrentSong():GetStepsByStepsType( st )
@@ -654,11 +724,15 @@ function DisplaySpeedMod(pn)
 end
 
 function GameplayBPM(self)
-	bpm[3] = Screen():GetChild('BPMDisplay'):GetChild('Text'):GetText()
-	if not OPENITG then bpm[3] = math.floor(bpm[3] * modRate + 0.5) end
-	self:settext(bpm[3])
-	self:sleep(.05)
-	self:queuecommand('Update')
+	local b = Screen():GetChild('BPMDisplay')
+	if b then b = b:GetChild('Text'):GetText() end
+	if b then 
+		bpm[3] = Screen():GetChild('BPMDisplay'):GetChild('Text'):GetText()
+		if not OPENITG then bpm[3] = math.floor(bpm[3] * modRate + 0.5) end
+		self:settext(bpm[3])
+		self:sleep(.05)
+		self:queuecommand('Update')
+	end
 end
 
 -------------------------------------
@@ -678,10 +752,10 @@ ModsMaster = {}
 ModsMaster.Perspective =	{ modlist = {'Overhead','Hallway','Distant','Incoming','Space'}, Select = 1 }
 ModsMaster.NoteSkin =		{ modlist = {'Cel','Metal','Flat','Robot','Vivid'}, Select = 1 }
 ModsMaster.Turn =			{ modlist = {'Mirror','Left','Right','Shuffle','Blender'}, default = 'no mirror,no left,no right,no shuffle,no supershuffle', mods = {'mirror','left','right','shuffle','supershuffle'} }
-ModsMaster.Hide = 			{ modlist = {'Hide Targets','Hide Judgments','Hide Background'}, default ='no dark,no blind,no cover', mods = {'dark','blink','cover'} }
+ModsMaster.Hide = 			{ modlist = {'Hide Targets','Hide Judgments','Hide Background'}, default ='no dark,no blind,no cover', mods = {'dark','blind','cover'} }
 ModsMaster.Accel =			{ modlist = {'Accel','Decel','Wave','Boomerang','Expand','Bump'}, default = 'no boost,no brake,no wave,no boomerang,no expand,no bumpy', mods = {'Boost','Brake','Wave','Boomerang','Expand','Bumpy'} }
 ModsMaster.Scroll = 		{ modlist = {'Reverse','Split','Alternate','Cross','Centered'}, default = 'no reverse,no split,no alternate,no cross,no centered' }
-ModsMaster.Effect = 		{ modlist = {'Drunk','Dizzy','Flip','Tornado','Tipsy','Beat'}, default = 'no drunk,no dizzy,no flip,no tornado,no tipsy,no beat, no big', mods = {'drunk','dizzy','flip','60% tornado','tipsy','beat'} }
+ModsMaster.Effect = 		{ modlist = {'Drunk','Dizzy','Flip','Invert';'Tornado','Tipsy','Beat'}, default = 'no drunk,no dizzy,no flip,no invert,no tornado,no tipsy,no beat, no big', mods = {'drunk','dizzy','flip','invert','60% tornado','tipsy','beat'} }
 ModsMaster.Appearance = 	{ modlist = {'Sudden','Hidden','Blink','Stealth'}, default ='no hidden,no sudden,no blink,no stealth' }
 ModsMaster.Handicap = 		{ modlist = {'No Mines','No Rolls','No Holds','No Hands','No Jumps','No Stretch'}, default ='no nomines,no noholds,no norolls,no nohands,no nojumps,no nostretch', mods = {'nomines','norolls','noholds','nohands','nojumps','nostretch'} } 
 ModsMaster.InsertTaps =		{ name = 'Insert', modlist = {'Little','Big','Quick','Skippy','Echo','Wide','Stomp'}, default = 'no little,no big,no quick,no skippy,no echo,no stomp,no wide', mods = {'Little','Big','Quick','Skippy','Echo','Wide','Stomp'} }
@@ -711,7 +785,7 @@ ModsMaster.Beat =			{ float = true }
 ModsMaster.Mini =			{ float = true }
 
 ModsMaster.SpeedType =		{ fnctn = 'SpeedType' }
-ModsMaster.SpeedNumber =	{ fnctn = 'SpeedNumber'; float = true; Display = DisplaySpeedMod }
+ModsMaster.SpeedNumber =	{ fnctn = 'SpeedNumber' }
 ModsMaster.Next =			{ fnctn = 'NextScreenOption' }
 ModsMaster.Ghost = 			{ fnctn = 'EnableGhostData' }
 ModsMaster.Measure =		{ fnctn = 'MeasureOption', modlist = {-1,0,8,12,16,24,32} }
@@ -745,11 +819,12 @@ function LineNames()
 	optionIndex = tonumber(optionIndex) and math.mod(optionIndex,table.getn(playerOptions))+1 or optionIndex
 	optionsList = {}
 	lineNames = ''
-	
+
 	for i,v in ipairs(playerOptions[optionIndex]) do
 		table.insert(optionsList,v)
 		lineNames = lineNames .. 'Mod' .. ','
 	end
+
 	lineNames = string.sub(lineNames,1,string.len(lineNames)-1)
 	if table.getn(playerOptions) > 1 and optionIndex ~= 'Edit' then table.insert(optionsList,'Next') lineNames = lineNames .. ',' .. 'Mod' else nextScreen = ScreenList('Gameplay') end
 end
@@ -768,10 +843,9 @@ end
 function OptionFloat(mod)
 	if not ModsPlayer[mod] then ModsPlayer[mod] = {0,0} end
 	local name = ModsMaster[mod].name or mod
-	local change = SliderChange(ModsMaster[mod].min,ModsMaster[mod].max)
-	local function up(pn,slider) ModsPlayer[mod][pn+1] = change(ModsPlayer[mod][pn+1],slider[pn+1][2]) ApplyMod(mod,pn+1,ModsPlayer[mod][pn+1]) SetOptionRow(mod) end
-	local function down(pn,slider) ModsPlayer[mod][pn+1] = change(ModsPlayer[mod][pn+1],-slider[pn+1][2]) ApplyMod(mod,pn+1,ModsPlayer[mod][pn+1]) SetOptionRow(mod) end
-	return SliderOption(name,up,down)
+	local function display( text , pn ) text:settext( ModsPlayer[mod][pn] .. '%' ) end
+	local function move(pn,dir,cnt) ModsPlayer[mod][pn+1] = AddSnap(ModsPlayer[mod][pn+1], dir , cnt , { 1 , 5 , 25 }) ApplyMod(mod,pn+1,ModsPlayer[mod][pn+1]) end
+	return SliderOption(name,move,display)
 end
 
 function OptionBool(mod)
@@ -809,30 +883,42 @@ function BoolPrefRow(name,pref,tab)
 	return t
 end
 
-function SliderOption(var,up,down,m)
-	local slider = {{1,1,0},{1,1,0}} -- {position, speed, clock}
-	local hmax = m or 5 -- maximum held speed
-	local t = OptionRowBase(var,{' ',' ',' '})
+-- have clock track larger time
+-- if second is 1 higher but ms is still within range, neither increment or reset. Make some indication of second increase
+-- if this happens twice in a row, guarantee 
+-- on negative 
+
+SliderDisplayFunction = { }
+function SliderOption(name,move,display,share)
+
+	-- allows SetOptionRow to access display functions based on row name, so initial setting can be made.
+	SliderDisplayFunction[name] = display
+	if THEMED_TITLES then SliderDisplayFunction[THEME:GetMetric("OptionTitles",name)] = display end
+
+	local slider = {{1,1,0},{1,1,0}} -- {position, counts, clock}
+	local t = OptionRowBase(name,{' ',' ',' '})
+	t.OneChoiceForAllPlayers = share
 	t.LayoutType = 'ShowOneInRow'
 	t.LoadSelections = function(self, list, pn) list[1] = true slider[pn+1][1] = 1 end
 	t.SaveSelections = function(self, list, pn)
-			if Clock(slider[pn+1][3]) < 0.1 then slider[pn+1][2] = math.min(slider[pn+1][2]+1,hmax) else slider[pn+1][2] = 1 end slider[pn+1][3] = Clock()
+			if share and pn ~= GAMESTATE:GetMasterPlayerNumber() then return end
+			if Clock(slider[pn+1][3]) < 0.1 then slider[pn+1][2] = math.min(slider[pn+1][2]+1) else slider[pn+1][2] = 1 end
+			slider[pn+1][3] = Clock()
 			for i=1,3 do if list[i] then
-				if slider[pn+1][1] == math.mod(i+2,3) then up(pn,slider) end
-				if slider[pn+1][1] == math.mod(i+1,3) then down(pn,slider) end
+				if slider[pn+1][1] == math.mod(i+2,3) then move(pn, 1,slider[pn+1][2]) SetOptionRow(name) end
+				if slider[pn+1][1] == math.mod(i+1,3) then move(pn,-1,slider[pn+1][2]) SetOptionRow(name) end
 				slider[pn+1][1] = math.mod(i,3)
 			end end
 		end
 	return t
 end
 
-function SliderChange(min,max)
-	local function change(v,i) return v + i end
-	if min and max then function change(v,i) return math.mod(v+i+max-min+1-min,max-min+1)+min end
-		elseif min then function change(v,i) return math.max(v+i,min) end
-		elseif max then function change(v,i) return math.min(v+i,max) end end
-	return change
-end  
+function AddSnap( val , dir , cnt , speed )
+	local n = clamp( math.floor( cnt / 5 ) + 1 , 1 , table.getn( speed ) )
+	local add = dir * speed[n]
+	local ret = val + add
+	return ret - math.mod( ret , add )
+end
 
 --------------------
 -- Lua Option Rows
@@ -841,15 +927,15 @@ end
 function SpeedType()
 	local t = OptionRowBase((optionIndex == 'Edit' and 'Speed') or 'Speed Mod Type',{ 'x' , 'C' })
 	t.LoadSelections = function(self, list, pn) for i,v in ipairs(self.Choices) do if modType[pn+1] == v then list[i] = true end end end
-	t.SaveSelections = function(self, list, pn) for i,v in ipairs(list) do if v then modType[pn+1] = self.Choices[i] end end SetSpeedMod(pn+1) SetOptionRow('SpeedNumber',true) end
+	t.SaveSelections = function(self, list, pn) for i,v in ipairs(list) do if v then modType[pn+1] = self.Choices[i] end end SetSpeedMod(pn+1) SetOptionRow('Adjust Speed',true) end
 	t.LayoutType = 'ShowOneInRow'
 	return t
 end
 
 function SpeedNumber()
-	local function up(pn,slider) modSpeed[pn+1] = math.min(modSpeed[pn+1] + slider[pn+1][2]*speedSpread,speedMax) SetSpeedMod(pn+1) SetOptionRow('SpeedNumber') end
-	local function down(pn,slider) modSpeed[pn+1] = math.max(modSpeed[pn+1] - slider[pn+1][2]*speedSpread,speedMin) SetSpeedMod(pn+1) SetOptionRow('SpeedNumber') end
-	return SliderOption('Adjust Speed',up,down,10)
+	local function display( text , pn ) text:settext( DisplaySpeedMod(pn) ) end
+	local function move(pn,dir,cnt) modSpeed[pn+1] = clamp( AddSnap(modSpeed[pn+1] , dir , cnt , { 5 , 25 , 100 } ) , speedMin , speedMax ); SetSpeedMod(pn+1) end
+	return SliderOption('Adjust Speed',move,display)
 end
 
 function RateMods( s )
@@ -859,7 +945,6 @@ function RateMods( s )
 	t.SaveSelections = function(self, list, pn)
 		for i,m in ipairs(self.Choices) do if list[i] then s = string.gsub(m,'x',''); modRate = tonumber(s) end end
 		ApplyMod(s..'xmusic',pn+1)
-		ApplyRateAdjust()
 		MESSAGEMAN:Broadcast('RateModChanged')
 	end
 	return t
@@ -879,17 +964,38 @@ end
 
 function EnableGhostData(a) -- Use an argument of 0 for the operator menu option, to affect machine profile.
 	local t = OptionRowBase('Save Ghost Data',{'No','Yes'})
-	t.OneChoiceForAllPlayers = true
-	t.LoadSelections = function(self, list, pn) if not Profile(a or pn+1).Ghost then Profile(a or pn+1).Ghost = {} end if Profile(a or pn+1).Ghost.Save == 2 then list[2] = true else list[1] = true end end
-	t.SaveSelections = function(self, list, pn) for i,v in ipairs(list) do if v then Profile(a or pn+1).Ghost.Save = i end end end
+	if a then t.OneChoiceForAllPlayers = true end
+	t.LoadSelections = function(self, list, pn) if not Profile(a or pn+1).Ghost then Profile(a or pn+1).Ghost = {} end list[2] = Profile(a or pn+1).Ghost.Save; list[1] = not list[2] end
+	t.SaveSelections = function(self, list, pn) Profile(a or pn+1).Ghost.Save = list[2] end
+	if a then CheckProfile.Ghost = { Save = Profile(0).Ghost and Profile(0).Ghost.Save } end
+	return t
+end
+
+function PlayModeType()
+	local t = OptionRowBase('Play Mode Type',{'Stages','Timer'})
+	t.OneChoiceForAllPlayers = true 
+	t.LoadSelections = function(self, list) list[2] = Profile(0).TimedSets; list[1] = not list[2] end
+	t.SaveSelections = function(self, list) Profile(0).TimedSets = list[2] end
+	CheckProfile.TimedSets = Profile(0).TimedSets
 	return t
 end
 
 function SessionTimer()
 	Profile(0).SessionTimer = Profile(0).SessionTimer or 0
-	local function up(pn,slider) Profile(0).SessionTimer = Profile(0).SessionTimer+slider[pn+1][2] BM('Timer') end
-	local function down(pn,slider) Profile(0).SessionTimer = math.max(Profile(0).SessionTimer-slider[pn+1][2],0) BM('Timer') end
-	return SliderOption('Timer',up,down,5)
+	local function display( text ) text:settext( SecondsToMSS( Profile(0).SessionTimer ) ) end
+	local function move(pn,dir,cnt) Profile(0).SessionTimer = math.max( AddSnap( Profile(0).SessionTimer, dir , cnt , { 1 , 15 , 60 , 300 } ) , 0 ) end
+	local t = SliderOption('Play Timer',move,display,true)
+	CheckProfile.SessionTimer = Profile(0).SessionTimer
+	return t
+end
+
+function CutOffTime()
+	Profile(0).CutOffTime = Profile(0).CutOffTime or 0
+	local function display( text ) text:settext( SecondsToMSS( Profile(0).CutOffTime ) ) end
+	local function move(pn,dir,cnt) Profile(0).CutOffTime = math.max( AddSnap( Profile(0).CutOffTime, dir , cnt , { 1 , 15 , 60 , 300 } ) , 0 ) end
+	local t = SliderOption('Cut Off Time',move,display,true)
+	CheckProfile.CutOffTime = Profile(0).CutOffTime
+	return t
 end
 
 function JudgmentOption() return CustomMod('Judgment Font','JudgmentFont',judgmentFontList) end
@@ -924,7 +1030,7 @@ function CalculateSpeedMod()
 end
 
 function SpeedString(pn,speed) local s = speed or modSpeed[pn] or ''; if modType[pn] == 'x' then return string.format('%g',s/100) .. 'x' else return 'C' .. s end end
-function SetSpeedMod(pn) ApplyMod('1x',pn) ApplyRateAdjust() BM('SpeedModChanged') end
+function SetSpeedMod(pn) ApplyMod('1x',pn) ApplyMod(SpeedString(pn),pn) BM('SpeedModChanged') end
 
 function ApplyRateAdjust() for pn=1,2 do if Player(pn) then ApplyMod(SpeedString(pn,math.ceil(modSpeed[pn]/modRate)),pn) end end end
 function RevertRateAdjust() for pn=1,2 do if modSpeed then ApplyMod(SpeedString(pn),pn) end end end
@@ -935,14 +1041,27 @@ function SurroundLife()
 		local width = THEME:GetMetric('LifeMeterBar','MeterHeight')
 		local height = THEME:GetMetric('LifeMeterBar','MeterWidth')
 		meter:rotationz(-90)
-		meter:y(SCREEN_CENTER_Y+lifeBarSizeAdd.OffsetY) meter:zoomy((SCREEN_HEIGHT+lifeBarSizeAdd.Height)/height)
-		meter:x(SCREEN_CENTER_X+(SCREEN_CENTER_X+lifeBarSizeAdd.OffsetX)*(pn-1.5)) meter:zoomx((SCREEN_WIDTH+lifeBarSizeAdd.Width)/2/width)
+		meter:rotationy(0)
 		meter:GetChild(''):zoom(0)
 		meter:GetChild('Frame'):zoom(0)
 		meter:GetChild('Background'):zoom(0)
-		if GAMESTATE:PlayerUsingBothSides() then meter:x(SCREEN_CENTER_X) meter:zoomx((SCREEN_WIDTH+lifeBarSizeAdd.Width)/width) end
-		lifeNormal[pn]:Load(ThemeFile('white.png')); lifeNormal[pn]:diffuse(0.2,0.2,0.2,1) lifeNormal[pn]:fadetop(0.1) lifeNormal[pn]:fadebottom(0.1)
-		lifeHot[pn]:Load(ThemeFile('white.png')); lifeHot[pn]:diffuse(0.2,0.2,0.2,1) lifeHot[pn]:fadetop(0.1) lifeHot[pn]:fadebottom(0.1)
+		meter:y(SCREEN_CENTER_Y+lifeBarSizeAdd.OffsetY) meter:zoomy((SCREEN_HEIGHT+lifeBarSizeAdd.Height)/height)
+		if GAMESTATE:PlayerUsingBothSides() or ( GAMESTATE:GetNumPlayersEnabled() == 1 and GetPref('SoloSingle') ) then 
+			meter:x(SCREEN_CENTER_X) 
+			meter:zoomx((SCREEN_WIDTH+lifeBarSizeAdd.Width)/width)
+			lifeNormal[pn]:Load(ThemeFile('doublebar.png')); lifeNormal[pn]:diffuse(0.2,0.2,0.2,1)
+			lifeHot[pn]:Load(ThemeFile('doublebar.png')); lifeHot[pn]:diffuse(0.2,0.2,0.2,1)
+		else
+			meter:x(SCREEN_CENTER_X+((SCREEN_WIDTH*320/640)+lifeBarSizeAdd.OffsetX)*(pn-1.5)) 
+			meter:zoomx((SCREEN_WIDTH+lifeBarSizeAdd.Width)/2/width)
+			lifeNormal[pn]:Load(ThemeFile('white.png')); lifeNormal[pn]:diffuse(0.2,0.2,0.2,1)
+			lifeHot[pn]:Load(ThemeFile('white.png')); lifeHot[pn]:diffuse(0.2,0.2,0.2,1)
+			if pn == 1 then 
+				lifeNormal[pn]:fadebottom(0.8) lifeHot[pn]:fadebottom(0.8)
+			else 
+				lifeNormal[pn]:fadetop(0.8) lifeHot[pn]:fadetop(0.8)
+			end
+		end
 	end end
 end
 
@@ -1064,10 +1183,12 @@ end
 -- Option Row Display Functions
 --------------------------------
 
-function FrameOn(self)
+function FrameOn(self,ThemedTitles)
+	THEMED_TITLES = ThemedTitles
 	frameIgnore = {}
 	optionRow = {}
 	optionRowText = {}
+	optionRowTextCache = {}
 	optionUnderlineSprite = {}
 	optionCursor = {}
 	optionCursorSprite = {}
@@ -1083,46 +1204,54 @@ function FrameCapture(self) -- I had a simpler version which checked parent, but
 	for j,v in ipairs(frameIgnore) do if v == self then return true end end
 
 	if captureIndex == 1 then -- option rows, cursors, and line highlights
-   
+ 
 		if IsType(self,'ActorFrame') then
 			if IsType(self:GetChild(''),'ActorFrame') then table.insert(optionRow,self:GetChild('')) self:propagate(1) self:GetChild(''):propagate(1) end
 			if IsType(self:GetChild(''),'Sprite') then table.insert(optionCursor,self) table.insert(optionCursorSprite,{}) self:propagate(1) end
 		elseif IsType(self,'Sprite') then
 			table.insert(optionHighlight,self)
 		end
-	   
+	 
 	elseif captureIndex == 2 then -- cursor sprites, title and item text, and underlines
-   
+ 
 		if IsType(self,'Sprite') then
 			for j,v in ipairs(optionCursorSprite) do if not v[3] then table.insert(v,self) table.insert(frameIgnore,self) return end end
 			table.insert(optionRowText,{}) -- This will be the Bullets, one per option row, and they come before the text.
-		elseif IsType(self,'BitmapText') then
+		elseif IsType(self,'BitmapText') then -- First index is the row Title, the rest of the items.
 			table.insert(optionRowText[table.getn(optionRowText)],self)
+			if table.getn(optionRowText[table.getn(optionRowText)]) == 1 then optionRowTextCache[self:GetText()] = table.getn(optionRowText) end
 		elseif IsType(self,'ActorFrame') and self:GetNumChildren() == 3 then
 			table.insert(optionUnderlineSprite,{Row = table.getn(optionRowText)}) self:propagate(1)
 		end
-	   
+	 
 	elseif captureIndex == 3 then  -- underline sprites
 		Screen():GetChild('Frame'):propagate(0)
 		for j,v in ipairs(optionUnderlineSprite) do if not v[3] then table.insert(v,self) if v[3] then InitializeOptionRow(j) end return end end
 	end
-   
+
 	table.insert(frameIgnore,self)
 end
 
 function InitializeOptionRow(i) -- If (this is a slider option) and (we have all of its underlines) then run the Set underlines, text, and cursors.
 	local k = optionUnderlineSprite[i].Row
-	local mod = playerOptions[optionIndex][k] or 'Next'
+	local t = optionRowText[k] -- t[2] is the first item text. If this is a slider option then the string will be ' '.
 	local p = i+1-GAMESTATE:GetNumPlayersEnabled() -- previous index for 2 players
-	if ModsMaster[mod].float and (p > 0 and k == optionUnderlineSprite[p].Row) then SetOptionRow(k) end
+	if t[2]:GetText() == ' ' and (p > 0 and k == optionUnderlineSprite[p].Row) then SetOptionRow(k) end
 end
 
-function SetOptionRow(n,c) -- If c is true this will not adjust cursor size. Used for when changing speed mod type, which alters the text of a non-selected row.
+function SetOptionRow(row,c) -- If c is true this will not adjust cursor size. Used for when changing speed mod type, which alters the text of a non-selected row.
 
-	local i = n; if type(n) == 'string' then for j,v in ipairs(playerOptions[optionIndex]) do if v == n then i = j end end end
-	local mod = playerOptions[optionIndex][i]
-	
-	if not optionRowText[i] then return end -- Mods are saved when loading option rows, before tables are set. This prevents crash.
+	if not optionRowText[1] then return end -- "SaveSelections" is played when loading option rows, before tables are set. This prevents crash.
+
+	local r = row;
+	local name = row;
+   
+	if type(row) == 'string' then
+		r = optionRowTextCache[row]
+		if THEMED_TITLES then r = optionRowTextCache[THEME:GetMetric("OptionTitles",name)] end	
+	else
+		name = optionRowText[r][1]:GetText()
+	end
 
 	local function Size(u,t)
 		local z = t:GetWidth()*t:GetZoom()
@@ -1131,10 +1260,13 @@ function SetOptionRow(n,c) -- If c is true this will not adjust cursor size. Use
 		u[3]:x((z + u[1]:GetWidth())/2)
 	end
 
+	local display = SliderDisplayFunction[name]
+
 	for pn=1,2 do if Player(pn) then local p = PlayerIndex(pn) -- Must always check all players. When an option changes the entire row has its text set, not just the changing player.
-		optionRowText[i][p+1]:settext( ModsMaster[mod].Display and ModsMaster[mod].Display(pn) or ModsPlayer[mod][pn] .. '%' )
-		if not c and optionCursor[p]:GetY() > (optionRow[i-1]:GetY() or 0) and optionCursor[p]:GetY() < (optionRow[i+1]:GetY() or 0) then Size(optionCursorSprite[p],optionRowText[i][p+1]) end
-		for j,u in ipairs(optionUnderlineSprite) do if u.Row == i then Size(optionUnderlineSprite[j-1+p],optionRowText[i][p+1]) break end end
+		if not optionRowText[r][p+1] then optionRowText[r][p+1] = optionRowText[r][p] end -- false when "One Choice for all players"
+		display( optionRowText[r][p+1] , pn )
+		if not c and optionCursor[p]:GetY() > (optionRow[r-1]:GetY() or 0) and optionCursor[p]:GetY() < (optionRow[r+1]:GetY() or 0) then Size(optionCursorSprite[p],optionRowText[r][p+1]) end
+		for i,u in ipairs(optionUnderlineSprite) do if u.Row == r then Size(optionUnderlineSprite[i-1+p],optionRowText[r][p+1]) break end end
 	end end
 end
 
@@ -1145,4 +1277,101 @@ function CancelAll(self)
 	for s,v in pairs(ModsPlayer) do if tonumber(v[pn]) then v[pn] = 0 else v[pn] = nil end end
 	for i,v in ipairs(playerOptions[optionIndex]) do InitializeOptionRow(i) end
 	self:queuecommand('Go')
+end
+
+--------------------------------
+-- Timed Set Functions
+--------------------------------
+
+function MenuTimerSeconds( s ) TimedSet.MenuTimer = s; if IsTimedSet() or not GetPref('MenuTimer') then return -1 else return s end end
+function IsTimedSet() return not GAMESTATE:IsCourseMode() and Profile(0).TimedSets end
+
+TimedSet = { }
+TimedSet.Divider = ' / '
+TimedSet.Reset = function() 
+	TimedSet.Start = Clock(); 
+	if ( Profile(0).SessionTimer or 0 ) > 0 then
+		TimedSet.End = TimedSet.Start + Profile(0).SessionTimer
+		TimedSet.CutOff = TimedSet.End + Profile(0).CutOffTime
+	else
+		TimedSet.End = nil
+	end;
+end
+
+TimedSet.Display = function(self,t,f)
+	local time = t or Clock()
+	
+	local stop = ( f or TimedSet.End )
+	if stop then 
+		local length = ( f or ( TimedSet.End - TimedSet.Start ) )
+		time = stop - time
+		time = SecondsToMSS(time) .. TimedSet.Divider .. SecondsToMSS( length )
+	else
+		time = SecondsToMSS( time - TimedSet.Start )
+	end
+	
+	self:settext(time)
+	
+end
+
+TimedSet.Timer = function(self)
+
+	TimedSet.Display(self)
+
+	if not GetPref('EventMode') then
+
+		local time = -Clock( TimedSet.End )
+
+		-- Class 0 == menu, end game when timer ends
+		if TimedSet.Class == 0 and time < 0 then
+			SCREENMAN:SetNewScreen(ScreenList('NameEntry'))
+		end
+
+		-- Class 1 == gameplay, end game when CutOff time ends
+		if TimedSet.Class == 1 then
+			TimedSet.GameplayTime = Clock()
+			if time <= 0 then 
+				ApplyMod('FailImmediate',1)
+				self:diffuse(1,0,0,1)
+				TimedSet.Display(self,-time,Profile(0).CutOffTime)
+				if Clock( TimedSet.CutOff ) > 0 then
+					SCREENMAN:SetNewScreen(ScreenList('Evaluation'))
+				end
+			end
+		end
+
+		-- Class 2 == evaluation, allow at least TimedSet.MenuTimer seconds.
+		if TimedSet.Class == 2 and time < 0 then
+			local t = Clock( TimedSet.GameplayTime )
+			TimedSet.Display(self,t,TimedSet.MenuTimer)
+			if t > TimedSet.MenuTimer then
+				SCREENMAN:SetNewScreen(ScreenList('NameEntry'))
+			end
+		end
+
+	end
+	
+	self:sleep(1)
+	self:queuecommand('Timer')
+	
+end
+
+function SaveProfile(self)
+	if not CheckProfile then return end
+	
+	local bSave = false
+	for i,v in pairs( CheckProfile ) do
+		if type(v) == "table" then
+			for j,z in pairs( v ) do
+				if Profile(0)[i][j] ~= z then bSave = true end
+			end
+		else
+			if Profile(0)[i] ~= v then bSave = true end
+		end
+	end
+	
+	if bSave then
+		BM('SaveProfile')
+		self:queuecommand("SaveProfile")
+	end
 end

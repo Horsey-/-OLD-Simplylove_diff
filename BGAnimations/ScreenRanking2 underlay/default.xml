@@ -19,12 +19,12 @@
 	/>
 	<Layer
 		File="horiz-line"
-		OnCommand="x,SCREEN_CENTER_X;y,SCREEN_CENTER_Y-163"
+		OnCommand="x,SCREEN_CENTER_X;y,SCREEN_CENTER_Y-163;zoomx,1*((SCREEN_WIDTH/SCREEN_HEIGHT)/(4/3))"
 		OffCommand="linear,.5;diffusealpha,0"
 	/>
 	<Layer
 		File="horiz-line"
-		OnCommand="x,SCREEN_CENTER_X;y,SCREEN_CENTER_Y+163"
+		OnCommand="x,SCREEN_CENTER_X;y,SCREEN_CENTER_Y+163;zoomx,1*((SCREEN_WIDTH/SCREEN_HEIGHT)/(4/3))"
 		OffCommand="linear,.5;diffusealpha,0"
 	/>
 </children></ActorFrame>

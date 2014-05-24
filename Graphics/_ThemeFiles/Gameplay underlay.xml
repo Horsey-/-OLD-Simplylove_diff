@@ -1,18 +1,50 @@
 <ActorFrame	InitCommand="draworder,-102" OnCommand="" OffCommand="" ><children>
-	<Layer Type="ActorFrame" 
-		Command="%function(self) local pn = 1 self:aux(pn) local x2 = SCREEN_CENTER_X if GAMESTATE:PlayerUsingBothSides() then x2 = SCREEN_RIGHT*math.mod(pn,2) end self:stretchto(SCREEN_RIGHT*(pn-1),SCREEN_TOP,x2,SCREEN_BOTTOM) end"
-		DangerP1MessageCommand="%function(self) if Danger.State[self:getaux()] then self:queuecommand('Alive') else self:queuecommand('Danger') end end" DeadP1MessageCommand="%function(self) if not Dead.State[self:getaux()] then self:queuecommand('Dead') end end"
+	<ActorFrame
+		InitCommand="%function() 
+			function DangerActor(self,pn)
+				if self:getaux() ~= pn then return end
+				if Danger.State[pn] then 
+					self:queuecommand('Alive') 
+				else 
+					self:queuecommand('Danger') 
+				end 
+			end
+			function DeadActor(self,pn)
+				if self:getaux() ~= pn then return end
+				if not Dead.State[pn] then self:queuecommand('Dead') end 
+			end
+			function DeadDangerFrame(self,p)
+				local pn = p;
+				if GAMESTATE:PlayerUsingBothSides() or ( GAMESTATE:GetNumPlayersEnabled() == 1 and GetPref('SoloSingle') ) then 
+					pn = GAMESTATE:GetMasterPlayerNumber() + 1 
+				end;
+				self:aux(pn);
+				self:stretchto(SCREEN_RIGHT*(p-1),SCREEN_TOP,SCREEN_CENTER_X,SCREEN_BOTTOM)
+			end
+		end" 
+	/>
+	<Layer 
+		Type="ActorFrame" 
+		Command="%function(self) DeadDangerFrame(self,1) end"
+		DangerP1MessageCommand="%function(self) DangerActor(self,1) end"
+		DangerP2MessageCommand="%function(self) DangerActor(self,2) end"
+		DeadP1MessageCommand="%function(self) DeadActor(self,1) end"
+		DeadP2MessageCommand="%function(self) DeadActor(self,2) end"
 	><children>
-		<Layer Type="Quad" InitCommand="fadeleft,0.1;faderight,0.1;diffuseshift;effectcolor1,0.4,0,0,0.8;effectcolor2,0.4,0,0,0.2;hidden,1" DangerCommand="hidden,0" AliveCommand="hidden,1" DeadCommand="hidden,1" />
-		<Layer Type="Quad" InitCommand="fadeleft,0.1;faderight,0.1;diffuse,0,0,0,0" DeadCommand="hidden,0;diffuse,1,0,0,0;linear,0.3;diffuse,1,0,0,1;linear,0.3;diffuse,1,0,0,0.2" AliveCommand="hidden,1;diffuse,0,0,0,0" />
-		<Layer Type="Quad" InitCommand="fadeleft,0.1;faderight,0.1;diffuse,0,0,0,0" AliveCommand="hidden,0;diffuse,0,1,0,0;linear,0.3;diffuse,0,0.8,0,0.5;linear,0.3;diffuse,0,0,0,0" DeadCommand="hidden,1" />
+		<Layer Type="Quad" InitCommand="faderight,0.8;diffuseshift;effectcolor1,0.4,0,0,0.8;effectcolor2,0.4,0,0,0.2;hidden,1" DangerCommand="hidden,0" AliveCommand="hidden,1" DeadCommand="hidden,1" />
+		<Layer Type="Quad" InitCommand="faderight,0.8;diffuse,0,0,0,0" DeadCommand="hidden,0;diffuse,1,0,0,0;linear,0.3;diffuse,1,0,0,1;linear,0.3;diffuse,1,0,0,0.2" AliveCommand="hidden,1;diffuse,0,0,0,0" />
+		<Layer Type="Quad" InitCommand="faderight,0.8;diffuse,0,0,0,0" AliveCommand="hidden,0;diffuse,0,1,0,0;linear,0.3;diffuse,0,0.8,0,0.5;linear,0.3;diffuse,0,0,0,0" DeadCommand="hidden,1" />
 	</children></Layer>
-	<Layer Type="ActorFrame"
-		Command="%function(self) local pn = 2 self:aux(pn) local x2 = SCREEN_CENTER_X if GAMESTATE:PlayerUsingBothSides() then x2 = SCREEN_RIGHT*math.mod(pn,2) end self:stretchto(SCREEN_RIGHT*(pn-1),SCREEN_TOP,x2,SCREEN_BOTTOM) end"
-		DangerP2MessageCommand="%function(self) if Danger.State[self:getaux()] then self:queuecommand('Alive') else self:queuecommand('Danger') end end" DeadP2MessageCommand="%function(self) if not Dead.State[self:getaux()] then self:queuecommand('Dead') end end"
+	<Layer 
+		Type="ActorFrame"
+		Command="%function(self) DeadDangerFrame(self,2) end"
+		DangerP1MessageCommand="%function(self) DangerActor(self,1) end"
+		DangerP2MessageCommand="%function(self) DangerActor(self,2) end"
+		DeadP1MessageCommand="%function(self) DeadActor(self,1) end"
+		DeadP2MessageCommand="%function(self) DeadActor(self,2) end"
 	><children>
-		<Layer Type="Quad" InitCommand="fadeleft,0.1;faderight,0.1;diffuseshift;effectcolor1,0.4,0,0,0.8;effectcolor2,0.4,0,0,0.2;hidden,1" DangerCommand="hidden,0" AliveCommand="hidden,1" DeadCommand="hidden,1" />
-		<Layer Type="Quad" InitCommand="fadeleft,0.1;faderight,0.1;diffuse,0,0,0,0" DeadCommand="hidden,0;diffuse,1,0,0,0;linear,0.3;diffuse,1,0,0,1;linear,0.3;diffuse,1,0,0,0.2" AliveCommand="hidden,1;diffuse,0,0,0,0" />
-		<Layer Type="Quad" InitCommand="fadeleft,0.1;faderight,0.1;diffuse,0,0,0,0" AliveCommand="hidden,0;diffuse,0,1,0,0;linear,0.3;diffuse,0,0.8,0,0.5;linear,0.3;diffuse,0,0,0,0" DeadCommand="hidden,1" />
+		<Layer Type="Quad" InitCommand="faderight,0.8;diffuseshift;effectcolor1,0.4,0,0,0.8;effectcolor2,0.4,0,0,0.2;hidden,1" DangerCommand="hidden,0" AliveCommand="hidden,1" DeadCommand="hidden,1" />
+		<Layer Type="Quad" InitCommand="faderight,0.8;diffuse,0,0,0,0" DeadCommand="hidden,0;diffuse,1,0,0,0;linear,0.3;diffuse,1,0,0,1;linear,0.3;diffuse,1,0,0,0.2" AliveCommand="hidden,1;diffuse,0,0,0,0" />
+		<Layer Type="Quad" InitCommand="faderight,0.8;diffuse,0,0,0,0" AliveCommand="hidden,0;diffuse,0,1,0,0;linear,0.3;diffuse,0,0.8,0,0.5;linear,0.3;diffuse,0,0,0,0" DeadCommand="hidden,1" />
 	</children></Layer>
 </children></ActorFrame>

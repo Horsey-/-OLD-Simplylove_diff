@@ -26,7 +26,7 @@
 	<Actor
 		Condition="not GAMESTATE:IsCourseMode()"
 		File="@'../../Graphics/ScreenGameplay stage '..GetStageText()"
-		OnCommand="x,SCREEN_CENTER_X;y,SCREEN_CENTER_Y;diffusealpha,0;accelerate,0.3;diffusealpha,1"
+		OnCommand="x,SCREEN_CENTER_X;y,SCREEN_CENTER_Y;diffusealpha,0;accelerate,0.3;diffusealpha,1;playcommand,FadeIn"
 	/>
 	<Actor
 		Condition="GAMESTATE:IsCourseMode()"

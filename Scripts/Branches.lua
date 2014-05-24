@@ -16,7 +16,14 @@ function ScreenTitleBranch()
 end
 
 function EvaluationNextScreen()
-	if GAMESTATE:IsEventMode() then return SongSelectionScreen() end
+	if GetPref('EventMode') then return SongSelectionScreen() end
+	if IsTimedSet() then
+		if Clock( TimedSet.End ) < 0 then 
+			return SongSelectionScreen()
+		else
+			return "ScreenNameEntryTraditional" 
+		end
+	end
 	if AllFailed() or IsFinalStage() then return "ScreenNameEntryTraditional" end
 	return SongSelectionScreen();
 end
